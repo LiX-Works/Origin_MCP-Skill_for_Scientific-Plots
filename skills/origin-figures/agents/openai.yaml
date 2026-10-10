@@ -1,0 +1,6 @@
+interface:
+  display_name: "Origin Figures"
+  short_description: "Plan and verify scientific figures in Origin with MCP"
+  default_prompt: "Use $origin-figures to choose and create an Origin figure from my data, verify the supported workflow, and deliver the editable project and exports."
+policy:
+  allow_implicit_invocation: true

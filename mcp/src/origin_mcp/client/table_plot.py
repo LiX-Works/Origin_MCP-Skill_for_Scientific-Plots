@@ -1,0 +1,1589 @@
+from __future__ import annotations
+
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+
+from .. import template_library
+from ..errors import OriginMcpError, OriginOperationError
+from ..text_format import humanize_field_name
+from ..visual_defaults import (
+    automatic_histogram_bin_width,
+    decision_value,
+    resolve_visual_defaults,
+    strict_datetime_values,
+)
+from .base import (
+    MATRIX_PLOTM_IDS,
+    TABLE_PLOTXYZ_IDS,
+    TABLE_WORKSHEET_PLOT_IDS,
+    GraphRef,
+    WorksheetRef,
+    _OriginClientBase,
+)
+
+DUAL_Y_NATURE_AXIS_TITLE_SIZE = 20
+
+
+def _labtalk_number(value: Any) -> str:
+    return f"{float(value):.14g}"
+
+
+def _labtalk_date(value: str) -> str:
+    parsed = datetime.fromisoformat(value)
+    text = parsed.strftime("%Y/%m/%d %H:%M:%S")
+    return f"date({text},3)"
+
+
+class _TablePlotMixin(_OriginClientBase):
+    """Table-driven plotting: import CSV/Excel data and plot directly.
+
+    Owns plot_csv / plot_table / plot_table_by_id / plot_matrix_by_id and
+    the worksheet/plotxyz/matrix LabTalk command builders. Also home to
+    the cross-cutting graph-construction helpers (_new_graph, template
+    resolution, _plot_command) that other plotting flows reach via MRO.
+    """
+
+    def plot_csv(
+        self,
+        path: Path,
+        kind: str,
+        x_col: str | int | None = None,
+        y_cols: list[str | int] | None = None,
+        book_name: str | None = None,
+        sheet_name: str | None = None,
+        excel_sheet: str | int | None = 0,
+        graph_name: str | None = None,
+        style_mode: str = "origin_default",
+        palette_name: str | None = None,
+        export_path: Path | None = None,
+    ) -> tuple[WorksheetRef, GraphRef]:
+        return self.plot_table(
+            path=path,
+            kind=kind,
+            x_col=x_col,
+            y_cols=y_cols,
+            book_name=book_name,
+            sheet_name=sheet_name,
+            excel_sheet=excel_sheet,
+            graph_name=graph_name,
+            style_mode=style_mode,
+            palette_name=palette_name,
+            export_path=export_path,
+        )
+
+    def plot_table(
+        self,
+        path: Path,
+        kind: str,
+        x_col: str | int | None = None,
+        y_cols: list[str | int] | None = None,
+        book_name: str | None = None,
+        sheet_name: str | None = None,
+        excel_sheet: str | int | None = 0,
+        delimiter: str | None = None,
+        encoding: str | None = None,
+        header: int | None = 0,
+        skiprows: int | list[int] | None = None,
+        nrows: int | None = None,
+        na_values: str | list[str] | None = None,
+        graph_name: str | None = None,
+        template: str | None = None,
+        title: str | None = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        z_col: str | int | None = None,
+        y_error_col: str | int | None = None,
+        x_error_col: str | int | None = None,
+        show_legend: bool | None = None,
+        style_mode: str = "origin_default",
+        palette_name: str | None = None,
+        histogram_bin_width: float | str | None = None,
+        export_path: Path | None = None,
+    ) -> tuple[WorksheetRef, GraphRef]:
+        path = self._normalize_user_path(path)
+        self._validate_file(path)
+        df = self._read_table(
+            path,
+            excel_sheet=excel_sheet,
+            delimiter=delimiter,
+            encoding=encoding,
+            header=header,
+            skiprows=skiprows,
+            nrows=nrows,
+            na_values=na_values,
+        )
+        if df.empty:
+            raise OriginOperationError(f"Data file contains no rows: {path}")
+
+        columns = [str(col) for col in df.columns]
+        x_name = self._resolve_column(columns, x_col, default_index=0)
+        y_names = self._resolve_y_columns(columns, x_name, y_cols)
+        z_name = (
+            self._resolve_column(columns, z_col, default_index=2) if z_col is not None else None
+        )
+        yerr_name = (
+            self._resolve_column(columns, y_error_col, default_index=2)
+            if y_error_col is not None
+            else None
+        )
+        xerr_name = (
+            self._resolve_column(columns, x_error_col, default_index=2)
+            if x_error_col is not None
+            else None
+        )
+        df = self._coerce_x_datetime(df, x_name)
+
+        actual_book_name = book_name or (
+            self._safe_filename(f"{graph_name}_Data") if graph_name else None
+        )
+        wks = self._new_sheet(book_name=actual_book_name, sheet_name=sheet_name)
+        wks.cols = len(columns)
+        wks.from_df(df)
+
+        style_mode_actual = self._normalize_style_mode(style_mode)
+        visual_defaults = resolve_visual_defaults(
+            chart_type=kind,
+            chart_variant=template or kind,
+            series_count=len(y_names),
+            row_count=len(df),
+            x_values=df[x_name].to_numpy(),
+            y_series=[df[name].to_numpy() for name in y_names],
+            show_legend=show_legend,
+            palette_name=palette_name,
+            style_mode=style_mode_actual,
+            x_name=x_name,
+            y_names=y_names,
+            table=df,
+            title_hint=title,
+            x_label=x_label,
+            y_label=y_label,
+        )
+        show_legend_actual = bool(decision_value(visual_defaults, "legend", "show"))
+        graph_template = self._resolve_graph_template(kind=kind, template=template)
+        graph = self._new_graph(kind=kind, graph_name=graph_name, template=graph_template)
+        layer = graph[0] if hasattr(graph, "__getitem__") else graph
+
+        for y_name in y_names:
+            self._add_plot(
+                layer,
+                wks,
+                x_name=x_name,
+                y_name=y_name,
+                kind=kind,
+                z_name=z_name,
+                y_error_name=yerr_name,
+                x_error_name=xerr_name,
+            )
+
+        # Add plots while Origin can still resolve the imported DataFrame
+        # headers. Some Origin builds silently add zero plots when ``colx`` or
+        # ``coly`` is addressed by the original header after the worksheet Long
+        # Name row has been changed. Display labels are safe to apply once the
+        # plot data ranges have already been bound.
+        series_labels = decision_value(visual_defaults, "legend", "series_labels")
+        self._set_worksheet_display_labels(
+            wks,
+            columns,
+            overrides=dict(zip(y_names, series_labels, strict=True)),
+        )
+
+        actual_graph_name = self._object_name(graph, default=graph_name or "Graph")
+        if kind in {"column", "c"} and len(y_names) > 1:
+            self._group_layer_plots(layer, graph_name=actual_graph_name, layer_index=0)
+
+        self.format_graph(
+            graph=graph,
+            title=title,
+            x_label=decision_value(visual_defaults, "axes", "x_title"),
+            y_label=decision_value(visual_defaults, "axes", "y_title"),
+            show_legend=show_legend_actual,
+            rescale=True,
+        )
+        self._remember_graph_alias(graph_name, actual_graph_name)
+        if style_mode_actual == "nature":
+            style_kwargs: dict[str, Any] = {
+                "graph_name": actual_graph_name,
+                "chart_type": kind,
+                "show_legend": show_legend_actual,
+                "palette_name": decision_value(visual_defaults, "palette_name"),
+                "transparency": decision_value(visual_defaults, "marks", "transparency"),
+            }
+            self.apply_nature_style(**style_kwargs)
+        if kind == "histogram":
+            resolved_bin_width = histogram_bin_width
+            if histogram_bin_width == "auto" or (histogram_bin_width is None and template is None):
+                resolved_bin_width = automatic_histogram_bin_width(df[y_names[0]].to_numpy())
+            if resolved_bin_width is not None:
+                if not isinstance(resolved_bin_width, (int, float)) or resolved_bin_width <= 0:
+                    raise OriginOperationError(
+                        "histogram_bin_width must be a positive number or 'auto'."
+                    )
+                self.set_plot_style(
+                    graph_name=actual_graph_name,
+                    histogram_bin_width=float(resolved_bin_width),
+                )
+                # Origin keeps the Y limits from its initial automatic binning.
+                # Recompute the axes after changing the bin width so count bars
+                # are not clipped against the old (often 0..1.1) range.
+                self._rescale(layer)
+        visual_defaults["applied"] = self._apply_smart_visual_defaults(
+            graph_name=actual_graph_name,
+            defaults=visual_defaults,
+        )
+        exported: str | None = None
+        if export_path is not None:
+            exported = self._export_plot_command_graph(export_path, actual_graph_name)["path"]
+
+        worksheet = self._worksheet_ref(wks, columns=columns, rows=len(df))
+        return worksheet, GraphRef(
+            graph_name=actual_graph_name,
+            export_path=exported,
+            template=graph_template,
+            style_mode=style_mode_actual,
+            requested_graph_name=graph_name,
+            display_name=self._object_long_name(graph, default=graph_name),
+            visual_defaults=visual_defaults,
+        )
+
+    def plot_dual_y(
+        self,
+        path: Path,
+        x_col: str | int | None = None,
+        y1_cols: list[str | int] | None = None,
+        y2_cols: list[str | int] | None = None,
+        book_name: str | None = None,
+        sheet_name: str | None = None,
+        excel_sheet: str | int | None = 0,
+        delimiter: str | None = None,
+        encoding: str | None = None,
+        header: int | None = 0,
+        skiprows: int | list[int] | None = None,
+        nrows: int | None = None,
+        na_values: str | list[str] | None = None,
+        graph_name: str | None = None,
+        title: str | None = None,
+        x_label: str | None = None,
+        y1_label: str | None = None,
+        y2_label: str | None = None,
+        plot_type: str = "line",
+        show_legend: bool | None = None,
+        style_mode: str = "origin_default",
+        palette_name: str | None = None,
+        export_path: Path | None = None,
+    ) -> tuple[WorksheetRef, GraphRef]:
+        if not y1_cols or not y2_cols:
+            raise OriginOperationError(
+                "Both y1_cols (left axis) and y2_cols (right axis) are required.",
+                error_code="invalid_request",
+            )
+        path = self._normalize_user_path(path)
+        self._validate_file(path)
+        df = self._read_table(
+            path,
+            excel_sheet=excel_sheet,
+            delimiter=delimiter,
+            encoding=encoding,
+            header=header,
+            skiprows=skiprows,
+            nrows=nrows,
+            na_values=na_values,
+        )
+        if df.empty:
+            raise OriginOperationError(f"Data file contains no rows: {path}")
+
+        columns = [str(col) for col in df.columns]
+        x_name = self._resolve_column(columns, x_col, default_index=0)
+        y1_names = [self._resolve_column(columns, col, default_index=1) for col in y1_cols]
+        y2_names = [self._resolve_column(columns, col, default_index=1) for col in y2_cols]
+        df = self._coerce_x_datetime(df, x_name)
+        style_mode_actual = self._normalize_style_mode(style_mode)
+        visual_defaults = resolve_visual_defaults(
+            chart_type=plot_type,
+            chart_variant=plot_type,
+            series_count=len(y1_names) + len(y2_names),
+            row_count=len(df),
+            x_values=df[x_name].to_numpy(),
+            y_series=[df[name].to_numpy() for name in y1_names + y2_names],
+            show_legend=show_legend,
+            palette_name=palette_name,
+            style_mode=style_mode_actual,
+            x_name=x_name,
+            y_names=y1_names,
+            y2_names=y2_names,
+            table=df,
+            title_hint=title,
+            x_label=x_label,
+            y_label=y1_label,
+            y2_label=y2_label,
+        )
+        show_legend_actual = bool(decision_value(visual_defaults, "legend", "show"))
+
+        actual_book_name = book_name or (
+            self._safe_filename(f"{graph_name}_Data") if graph_name else None
+        )
+        wks = self._new_sheet(book_name=actual_book_name, sheet_name=sheet_name)
+        wks.from_df(df)
+
+        # The built-in "doubleY" template makes layer 2 share layer 1's X axis
+        # and draw its own Y axis on the right, so we just add each side's plots
+        # to the matching layer.
+        graph = self._new_graph(kind="line", graph_name=graph_name, template="doubleY")
+        layer_left = self._graph_layer(graph, 0)
+        layer_right = self._graph_layer(graph, 1)
+        for y_name in y1_names:
+            self._add_plot(layer_left, wks, x_name=x_name, y_name=y_name, kind=plot_type)
+        for y_name in y2_names:
+            self._add_plot(layer_right, wks, x_name=x_name, y_name=y_name, kind=plot_type)
+
+        series_labels = decision_value(visual_defaults, "legend", "series_labels")
+        self._set_worksheet_display_labels(
+            wks,
+            columns,
+            overrides=dict(zip(y1_names + y2_names, series_labels, strict=True)),
+        )
+
+        actual_graph_name = self._object_name(graph, default=graph_name or "Graph")
+        layer_left.axis("x").title = self._label_text(
+            decision_value(visual_defaults, "axes", "x_title")
+        )
+        layer_left.axis("y").title = self._label_text(
+            decision_value(visual_defaults, "axes", "y_title")
+        )
+        layer_right.axis("y").title = self._label_text(
+            decision_value(visual_defaults, "axes", "y2_title")
+        )
+        if title:
+            self._set_page_long_name(graph, title, force_labtalk=graph_name is not None)
+        self._rescale(layer_left)
+        self._rescale(layer_right)
+        self._remember_graph_alias(graph_name, actual_graph_name)
+        if style_mode_actual == "nature":
+            self.apply_nature_style(
+                graph_name=actual_graph_name,
+                chart_type=plot_type,
+                show_legend=show_legend_actual,
+                palette_name=decision_value(visual_defaults, "palette_name"),
+                transparency=decision_value(visual_defaults, "marks", "transparency"),
+            )
+        try:
+            self.format_graph(
+                graph_name=actual_graph_name,
+                show_legend=show_legend_actual,
+                rescale=False,
+            )
+        except OriginMcpError:
+            pass
+        visual_defaults["applied"] = self._apply_smart_visual_defaults(
+            graph_name=actual_graph_name,
+            defaults=visual_defaults,
+        )
+        visual_defaults["applied"]["dual_y_titles"] = self._sync_dual_y_axis_titles(
+            graph_name=actual_graph_name,
+            left_title=decision_value(visual_defaults, "axes", "y_title"),
+            right_title=decision_value(visual_defaults, "axes", "y2_title"),
+            style_mode=style_mode_actual,
+        )
+
+        exported: str | None = None
+        if export_path is not None:
+            exported = self._export_plot_command_graph(export_path, actual_graph_name)["path"]
+
+        worksheet = self._worksheet_ref(wks, columns=columns, rows=len(df))
+        return worksheet, GraphRef(
+            graph_name=actual_graph_name,
+            export_path=exported,
+            template="doubleY",
+            style_mode=style_mode_actual,
+            requested_graph_name=graph_name,
+            display_name=self._object_long_name(graph, default=graph_name),
+            visual_defaults=visual_defaults,
+        )
+
+    def _sync_dual_y_axis_titles(
+        self,
+        *,
+        graph_name: str,
+        left_title: str,
+        right_title: str,
+        style_mode: str,
+    ) -> dict[str, Any]:
+        """Synchronize the visible title objects used by Origin's doubleY template."""
+
+        safe_graph = self._escape_labtalk(graph_name)
+        safe_left = self._labtalk_text(left_title).replace('"', '\\"')
+        safe_right = self._labtalk_text(right_title).replace('"', '\\"')
+        parts = [
+            f'win -a "{safe_graph}";',
+            "layer -s 1;",
+            f'yl.text$="{safe_left}";',
+            "layer -s 2;",
+            f'yr.text$="{safe_right}";',
+        ]
+        if style_mode == "nature":
+            parts.extend(
+                [
+                    "layer -s 1;",
+                    "yl.font=font(Arial);",
+                    f"yl.fsize={DUAL_Y_NATURE_AXIS_TITLE_SIZE};",
+                    "layer -s 2;",
+                    "yr.font=font(Arial);",
+                    f"yr.fsize={DUAL_Y_NATURE_AXIS_TITLE_SIZE};",
+                ]
+            )
+        script = " ".join(parts)
+        try:
+            return {"script": script, **self.run_labtalk(script)}
+        except OriginMcpError as exc:
+            return {"script": script, "warning": str(exc)}
+
+    def plot_table_by_id(
+        self,
+        path: Path,
+        plot_type_id: int,
+        template: str,
+        selected_cols: list[str | int] | None = None,
+        book_name: str | None = None,
+        sheet_name: str | None = None,
+        excel_sheet: str | int | None = 0,
+        delimiter: str | None = None,
+        encoding: str | None = None,
+        header: int | None = 0,
+        skiprows: int | list[int] | None = None,
+        nrows: int | None = None,
+        na_values: str | list[str] | None = None,
+        graph_name: str | None = None,
+        title: str | None = None,
+        x_label: str | None = None,
+        y_label: str | None = None,
+        show_legend: bool | None = None,
+        style_mode: str = "origin_default",
+        palette_name: str | None = None,
+        colormap: str | None = None,
+        histogram_bin_width: float | str | None = None,
+        export_path: Path | None = None,
+    ) -> tuple[WorksheetRef, GraphRef, dict[str, Any]]:
+        path = self._normalize_user_path(path)
+        self._validate_file(path)
+        df = self._read_table(
+            path,
+            excel_sheet=excel_sheet,
+            delimiter=delimiter,
+            encoding=encoding,
+            header=header,
+            skiprows=skiprows,
+            nrows=nrows,
+            na_values=na_values,
+        )
+        if df.empty:
+            raise OriginOperationError(f"Data file contains no rows: {path}")
+
+        columns = [str(col) for col in df.columns]
+        selected = self._resolve_selected_columns(columns, selected_cols)
+        style_mode_actual = self._normalize_style_mode(style_mode)
+        chart_type = self._nature_chart_type_for_plot_id(plot_type_id, template)
+        axis_x_name, axis_y_names = self._plot_type_axis_fields(selected, plot_type_id)
+        if axis_x_name in columns:
+            df = self._coerce_x_datetime(df, axis_x_name)
+        profile_x, profile_y, series_count = self._plot_type_visual_profile(
+            df,
+            selected,
+            plot_type_id,
+        )
+        smart_defaults = resolve_visual_defaults(
+            chart_type=chart_type,
+            chart_variant=template,
+            series_count=series_count,
+            row_count=len(df),
+            x_values=profile_x,
+            y_series=profile_y,
+            show_legend=show_legend,
+            palette_name=palette_name,
+            style_mode=style_mode_actual,
+            x_name=axis_x_name,
+            y_names=axis_y_names,
+            table=df,
+            title_hint=title,
+            x_label=x_label,
+            y_label=y_label,
+        )
+        show_legend_actual = bool(decision_value(smart_defaults, "legend", "show"))
+        resolved_bin_width = histogram_bin_width
+        if histogram_bin_width == "auto":
+            resolved_bin_width = automatic_histogram_bin_width(df[selected[0]].to_numpy())
+        if resolved_bin_width is not None and (
+            not isinstance(resolved_bin_width, (int, float)) or resolved_bin_width <= 0
+        ):
+            raise OriginOperationError("histogram_bin_width must be a positive number or 'auto'.")
+        actual_book_name = book_name or (
+            self._safe_filename(f"{graph_name}_Data") if graph_name else None
+        )
+        wks = self._new_sheet(book_name=actual_book_name, sheet_name=sheet_name)
+        wks.from_df(df)
+        series_labels = decision_value(smart_defaults, "legend", "series_labels")
+        self._set_worksheet_display_labels(
+            wks,
+            columns,
+            overrides={
+                name: label
+                for name, label in zip(axis_y_names, series_labels, strict=True)
+                if name in columns
+            },
+        )
+        if plot_type_id == 242:
+            # Plot type 242 (3D Colormap Surface) consumes a matrix, not scattered
+            # XYZ worksheet columns: plotxyz against XYZ produces an empty graph.
+            # Grid the XYZ data into a matrix and plot it as a matrix surface (103).
+            return self._plot_surface_from_xyz_table(
+                df=df,
+                wks=wks,
+                columns=columns,
+                selected=selected,
+                graph_name=graph_name,
+                title=title,
+                x_label=x_label,
+                y_label=y_label,
+                style_mode=style_mode,
+                palette_name=decision_value(smart_defaults, "palette_name"),
+                show_legend=show_legend_actual,
+                smart_defaults=smart_defaults,
+                export_path=export_path,
+            )
+        command, range_option = self._table_plot_command_options(plot_type_id)
+        if command == "plotxyz" or plot_type_id in {183, 184}:
+            self._set_plotxyz_designations(wks, columns, selected, plot_type_id)
+        data_range = self._worksheet_range_expr(wks, columns, selected)
+        graph_name_actual = graph_name or self._safe_filename(f"{template}_{plot_type_id}")
+        existing_graphs = self._graph_page_names()
+        existing_graph = self._find_graph_optional(graph_name_actual)
+        reuse_existing_graph = existing_graph is not None and command != "worksheet"
+        if reuse_existing_graph:
+            self._clear_graph_plots(existing_graph, graph_name_actual)
+        creation_bin_width = (
+            float(resolved_bin_width)
+            if plot_type_id == 219 and resolved_bin_width is not None
+            else None
+        )
+        if creation_bin_width is not None:
+            # Origin calculates the derived Bin worksheet when the histogram is
+            # created. Setting @HBS beforehand gives the graph the correct bin
+            # counts and initial Y scale; changing -hbs afterward alone does not
+            # reliably rebuild those derived values in all Origin versions.
+            self.run_labtalk(f"@HBS={creation_bin_width:g};")
+        try:
+            if command == "worksheet":
+                script = self._worksheet_plot_command(columns, selected, plot_type_id, template)
+                result = self._execute_on_worksheet(wks, script)
+            else:
+                script = self._plot_command(
+                    command=command,
+                    range_option=range_option,
+                    data_range=data_range,
+                    plot_type_id=plot_type_id,
+                    template=template,
+                    graph_name=graph_name_actual,
+                    reuse_existing=reuse_existing_graph,
+                )
+                result = self.run_labtalk(script)
+        finally:
+            if creation_bin_width is not None:
+                self.run_labtalk("@HBS=-1;")
+        self._assert_plot_type_command(
+            plot_type_id=plot_type_id,
+            template=template,
+            command=command,
+            range_option=range_option,
+            script=script,
+        )
+        self._assert_plot_created(
+            plot_type_id=plot_type_id,
+            template=template,
+            selected=selected,
+            existing_graphs=existing_graphs,
+            reuse_existing=reuse_existing_graph,
+            result=result,
+            script=script,
+        )
+        graph_name_actual = self._created_graph_name(
+            requested_graph_name=graph_name_actual,
+            existing_graphs=existing_graphs,
+            prefer_created=command == "worksheet",
+        )
+        output_warning = self._plot_command_output_warning(
+            requested_graph_name=graph_name or graph_name_actual,
+            actual_graph_name=graph_name_actual,
+        )
+        self._remember_graph_alias(graph_name, graph_name_actual)
+        inferred_x_label = (
+            decision_value(smart_defaults, "axes", "x_title") if axis_x_name else None
+        )
+        inferred_y_label = (
+            decision_value(smart_defaults, "axes", "y_title") if axis_y_names else None
+        )
+        if title or inferred_x_label or inferred_y_label:
+            try:
+                self.format_graph(
+                    graph_name=graph_name_actual,
+                    title=title,
+                    x_label=inferred_x_label,
+                    y_label=inferred_y_label,
+                    rescale=True,
+                )
+            except OriginMcpError:
+                pass
+        self._suppress_graph_title_text(graph_name=graph_name_actual, title=title)
+        if style_mode_actual == "nature":
+            style_kwargs = {
+                "graph_name": graph_name_actual,
+                "chart_type": chart_type,
+                "show_legend": show_legend_actual,
+                "palette_name": decision_value(smart_defaults, "palette_name"),
+                "transparency": decision_value(smart_defaults, "marks", "transparency"),
+            }
+            self.apply_nature_style(**style_kwargs)
+        visual_defaults: dict[str, Any] = {"smart": smart_defaults}
+        if colormap is not None:
+            visual_defaults["colormap"] = self.set_plot_style(
+                graph_name=graph_name_actual,
+                colormap=colormap,
+            )
+        if resolved_bin_width is not None:
+            visual_defaults["histogram_bin_width"] = self.set_plot_style(
+                graph_name=graph_name_actual,
+                histogram_bin_width=float(resolved_bin_width),
+            )
+            # The plot is initially scaled for Origin's automatic bins. A
+            # custom width changes the counts and therefore requires a second
+            # rescale before export.
+            self.format_graph(graph_name=graph_name_actual, rescale=True)
+        try:
+            self.format_graph(
+                graph_name=graph_name_actual,
+                show_legend=show_legend_actual,
+                rescale=False,
+            )
+        except OriginMcpError:
+            pass
+        smart_defaults["applied"] = self._apply_smart_visual_defaults(
+            graph_name=graph_name_actual,
+            defaults=smart_defaults,
+        )
+        exported = None
+        if export_path is not None:
+            exported = self._export_plot_command_graph(export_path, graph_name_actual)["path"]
+        worksheet = self._worksheet_ref(wks, columns=columns, rows=len(df))
+        return (
+            worksheet,
+            GraphRef(
+                graph_name=graph_name_actual,
+                export_path=exported,
+                template=template,
+                style_mode=style_mode_actual,
+                requested_graph_name=graph_name,
+                display_name=self._graph_display_name(
+                    graph_name_actual,
+                    default=title or graph_name,
+                ),
+                visual_defaults=smart_defaults,
+            ),
+            {
+                "script": script,
+                "result": result.get("result"),
+                "plot_type_id": plot_type_id,
+                "template": template,
+                "selected_columns": selected,
+                "command": command,
+                "range_option": range_option,
+                "warning": output_warning,
+                "visual_defaults": visual_defaults,
+            },
+        )
+
+    def _plot_surface_from_xyz_table(
+        self,
+        *,
+        df: Any,
+        wks: Any,
+        columns: list[str],
+        selected: list[str],
+        graph_name: str | None,
+        title: str | None,
+        x_label: str | None,
+        y_label: str | None,
+        style_mode: str,
+        palette_name: str | None,
+        show_legend: bool,
+        smart_defaults: dict[str, Any],
+        export_path: Path | None,
+    ) -> tuple[WorksheetRef, GraphRef, dict[str, Any]]:
+        """Grid scattered XYZ worksheet data into a matrix and plot a 3D
+        colormap surface (matrix plot type 103), mirroring the return shape of
+        :meth:`plot_table_by_id`."""
+
+        data_range = self._build_surface_matrix_from_xyz(df, selected)
+        existing_graphs = self._graph_page_names()
+        graph_name_actual = graph_name or self._safe_filename("glmesh_242")
+        self._activate_range_window(data_range)
+        script = self._plot_command(
+            command="plotm",
+            range_option="im",
+            data_range=data_range,
+            plot_type_id=103,
+            template="glmesh",
+            graph_name=graph_name_actual,
+        )
+        result = self.run_labtalk(script)
+        if not result.get("result"):
+            raise OriginOperationError(f"Origin rejected surface plot command: {script}")
+        graph_name_actual = self._created_graph_name(
+            requested_graph_name=graph_name_actual,
+            existing_graphs=existing_graphs,
+        )
+        output_warning = self._plot_command_output_warning(
+            requested_graph_name=graph_name or graph_name_actual,
+            actual_graph_name=graph_name_actual,
+        )
+        self._remember_graph_alias(graph_name, graph_name_actual)
+        if title or x_label or y_label:
+            try:
+                self.format_graph(
+                    graph_name=graph_name_actual,
+                    title=title,
+                    x_label=x_label,
+                    y_label=y_label,
+                    rescale=True,
+                )
+            except OriginOperationError:
+                pass
+        self._suppress_graph_title_text(graph_name=graph_name_actual, title=title)
+        style_mode_actual = self._normalize_style_mode(style_mode)
+        if style_mode_actual == "nature":
+            style_kwargs: dict[str, Any] = {
+                "graph_name": graph_name_actual,
+                "chart_type": self._nature_chart_type_for_plot_id(242, "glmesh"),
+                "show_legend": show_legend,
+                "palette_name": palette_name,
+                "transparency": decision_value(smart_defaults, "marks", "transparency"),
+            }
+            self.apply_nature_style(**style_kwargs)
+        try:
+            self.format_graph(
+                graph_name=graph_name_actual,
+                show_legend=show_legend,
+                rescale=False,
+            )
+        except OriginMcpError:
+            pass
+        smart_defaults["applied"] = self._apply_smart_visual_defaults(
+            graph_name=graph_name_actual,
+            defaults=smart_defaults,
+        )
+        exported = None
+        if export_path is not None:
+            exported = self._export_plot_command_graph(export_path, graph_name_actual)["path"]
+        worksheet = self._worksheet_ref(wks, columns=columns, rows=len(df))
+        return (
+            worksheet,
+            GraphRef(
+                graph_name=graph_name_actual,
+                export_path=exported,
+                template="glmesh",
+                style_mode=style_mode_actual,
+                requested_graph_name=graph_name,
+                display_name=self._graph_display_name(
+                    graph_name_actual,
+                    default=title or graph_name,
+                ),
+                visual_defaults=smart_defaults,
+            ),
+            {
+                "script": script,
+                "result": result.get("result"),
+                "plot_type_id": 242,
+                "template": "glmesh",
+                "selected_columns": selected,
+                "command": "plotm",
+                "range_option": "im",
+                "data_range": data_range,
+                "warning": output_warning,
+                "visual_defaults": {"smart": smart_defaults},
+            },
+        )
+
+    def _build_surface_matrix_from_xyz(self, df: Any, selected: list[str]) -> str:
+        """Build a regularly-gridded Origin matrix from XYZ worksheet columns and
+        return its data range (e.g. ``[MBook1]MSheet1!1``). Expects data that
+        lies on a rectangular X/Y grid; missing grid cells become gaps."""
+
+        try:
+            import numpy as np
+        except ImportError as exc:  # pragma: no cover - numpy ships with originpro
+            raise OriginOperationError("numpy is required to build a 3D surface matrix.") from exc
+
+        if len(selected) < 3:
+            raise OriginOperationError(
+                "A 3D surface needs three columns (X, Y, Z); "
+                f"got {len(selected)} selected column(s)."
+            )
+        x_name, y_name, z_name = selected[0], selected[1], selected[2]
+        x = np.round(df[x_name].to_numpy(dtype=float), 9)
+        y = np.round(df[y_name].to_numpy(dtype=float), 9)
+        z = df[z_name].to_numpy(dtype=float)
+
+        xs = np.unique(x)
+        ys = np.unique(y)
+        if len(xs) < 2 or len(ys) < 2:
+            raise OriginOperationError(
+                "A 3D surface needs at least a 2x2 grid of distinct X and Y values."
+            )
+        x_index = {value: idx for idx, value in enumerate(xs)}
+        y_index = {value: idx for idx, value in enumerate(ys)}
+        grid = np.full((len(ys), len(xs)), np.nan, dtype=float)
+        for xv, yv, zv in zip(x, y, z, strict=True):
+            grid[y_index[yv], x_index[xv]] = zv
+
+        op = self.op
+        new_sheet = getattr(op, "new_sheet", None)
+        if not callable(new_sheet):
+            raise OriginOperationError("originpro.new_sheet is not available.")
+        msheet = new_sheet("m")
+        from_np = getattr(msheet, "from_np", None)
+        if not callable(from_np):
+            raise OriginOperationError("Matrix sheet does not support from_np().")
+        from_np(grid)
+
+        range_base = msheet.lt_range(False)
+        book_name = range_base[1:].split("]", 1)[0] if range_base.startswith("[") else range_base
+        self.run_labtalk(
+            f'win -a "{self._escape_labtalk(book_name)}"; '
+            f"mdim cols:={len(xs)} rows:={len(ys)} "
+            f"x1:={xs[0]} x2:={xs[-1]} y1:={ys[0]} y2:={ys[-1]};"
+        )
+        return f"{range_base}!1"
+
+    def plot_matrix_by_id(
+        self,
+        data_range: str,
+        plot_type_id: int,
+        template: str,
+        graph_name: str | None = None,
+        title: str | None = None,
+        export_path: Path | None = None,
+    ) -> GraphRef:
+        if not data_range.strip():
+            raise OriginOperationError("data_range is empty.")
+        graph_name_actual = graph_name or self._safe_filename(f"{template}_{plot_type_id}")
+        before = self._graph_page_names() if plot_type_id == 105 else None
+        if before is not None and graph_name_actual in before:
+            raise OriginOperationError("Heatmap graph already exists; choose a new graph name.")
+        command = "plotm" if plot_type_id in MATRIX_PLOTM_IDS else "plotxyz"
+        range_option = "im" if command == "plotm" else "iz"
+        if command == "plotm":
+            self._activate_range_window(data_range)
+        script = self._plot_command(
+            command=command,
+            range_option=range_option,
+            data_range=data_range,
+            plot_type_id=plot_type_id,
+            template=template,
+            graph_name=graph_name_actual,
+        )
+        result = self.run_labtalk(script)
+        if not result.get("result"):
+            raise OriginOperationError(f"Origin rejected plot command: {script}")
+        if before is not None:
+            # plotm's name option can name its layer while the page is Graph1.
+            # Only the uniquely created page may be renamed or styled.
+            created = self._graph_page_names() - before
+            if len(created) != 1:
+                raise OriginOperationError("Cannot identify one newly created heatmap page.")
+            actual = next(iter(created))
+            if actual != graph_name_actual:
+                page = self._find_or_active_graph(actual)
+                page.name = graph_name_actual
+                graph_name_actual = self._object_name(page, default=actual)
+            self._remember_graph_alias(graph_name, graph_name_actual)
+        if title:
+            try:
+                self.format_graph(graph_name=graph_name_actual, title=title, rescale=True)
+            except OriginOperationError:
+                pass
+        else:
+            self._suppress_graph_title_text(graph_name=graph_name_actual, title=None)
+        exported = None
+        if export_path is not None:
+            exported = self._export_plot_command_graph(export_path, graph_name_actual)["path"]
+        return GraphRef(graph_name=graph_name_actual, export_path=exported)
+
+    @staticmethod
+    def _table_plot_command_options(plot_type_id: int) -> tuple[str, str]:
+        if plot_type_id in TABLE_WORKSHEET_PLOT_IDS:
+            return "worksheet", "selection"
+        if plot_type_id in TABLE_PLOTXYZ_IDS:
+            return "plotxyz", "iz"
+        return "plotxy", "iy"
+
+    @staticmethod
+    def _plot_command_output_warning(
+        requested_graph_name: str | None,
+        actual_graph_name: str | None,
+    ) -> str | None:
+        if not requested_graph_name or not actual_graph_name:
+            return None
+        if requested_graph_name == actual_graph_name:
+            return None
+        return (
+            f"Origin did not create or expose the requested graph {requested_graph_name!r}; "
+            f"using actual graph {actual_graph_name!r}."
+        )
+
+    def _assert_plot_created(
+        self,
+        plot_type_id: int,
+        template: str,
+        selected: list[str],
+        existing_graphs: set[str],
+        reuse_existing: bool,
+        result: dict[str, Any],
+        script: str,
+    ) -> None:
+        """Fail loudly when Origin rejected the plot command instead of silently
+        returning a graph that was never created.
+
+        Origin's ``worksheet -p`` route runs through the worksheet object's
+        ``lt_exec``, whose boolean result does not survive the bridge (it comes
+        back as ``None`` on both success and failure), so the only reliable
+        success signal is that a new graph page actually appeared. The
+        ``plotxy``/``plotxyz`` route does return a usable boolean, so an explicit
+        ``False`` is treated as a rejection directly."""
+
+        if reuse_existing:
+            return
+        status = result.get("result")
+        if status is False:
+            # plotxy/plotxyz return an authoritative boolean; False is a rejection.
+            raise OriginOperationError(
+                self._plot_rejected_message(plot_type_id, template, selected, script)
+            )
+        if status is True:
+            return
+        # status is None: the worksheet route's lt_exec boolean did not survive the
+        # bridge, so the only reliable success signal is a newly created graph
+        # page. Skip the check when page enumeration is unavailable so we never
+        # raise on a false negative.
+        if not callable(getattr(self._op, "pages", None)):
+            return
+        if self._graph_page_names() - existing_graphs:
+            return
+        raise OriginOperationError(
+            self._plot_rejected_message(plot_type_id, template, selected, script)
+        )
+
+    @staticmethod
+    def _plot_rejected_message(
+        plot_type_id: int,
+        template: str,
+        selected: list[str],
+        script: str,
+    ) -> str:
+        return (
+            f"Origin created no graph for plot type {plot_type_id} ({template}); "
+            "the plot command was rejected. Check that the selected columns match "
+            f"the plot type's required input (got {selected}). Script: {script}"
+        )
+
+    def _assert_plot_type_command(
+        self,
+        plot_type_id: int,
+        template: str,
+        command: str,
+        range_option: str,
+        script: str,
+    ) -> None:
+        expected_command, expected_range_option = self._table_plot_command_options(plot_type_id)
+        expected_fragments = {
+            "plotxy": f"plotxy {expected_range_option}:=",
+            "plotxyz": f"plotxyz {expected_range_option}:=",
+            "worksheet": f"worksheet -p {plot_type_id} {template}",
+        }
+        expected_fragment = expected_fragments[expected_command]
+        if (
+            command != expected_command
+            or range_option != expected_range_option
+            or expected_fragment not in script
+        ):
+            raise OriginOperationError(
+                "Plot type route mismatch: "
+                f"id={plot_type_id}, expected {expected_command}/{expected_range_option}, "
+                f"got {command}/{range_option}."
+            )
+
+    @staticmethod
+    def _worksheet_plot_command(
+        columns: list[str],
+        selected: list[str],
+        plot_type_id: int,
+        template: str,
+    ) -> str:
+        indexes = [columns.index(column) + 1 for column in selected]
+        if indexes != list(range(indexes[0], indexes[0] + len(indexes))):
+            raise OriginOperationError(
+                f"Plot type {plot_type_id} requires a contiguous worksheet selection."
+            )
+        safe_template = _OriginClientBase._escape_labtalk(template)
+        return (
+            f"worksheet -s {indexes[0]} 0 {indexes[-1]} 0; "
+            f"worksheet -p {plot_type_id} {safe_template};"
+        )
+
+    def _activate_range_window(self, data_range: str) -> None:
+        if not data_range.startswith("[") or "]" not in data_range:
+            return
+        window_name = data_range[1:].split("]", 1)[0].strip()
+        if not window_name:
+            return
+        try:
+            self.run_labtalk(f'win -a "{self._escape_labtalk(window_name)}";')
+        except OriginOperationError:
+            pass
+
+    def _set_plotxyz_designations(
+        self,
+        wks: Any,
+        columns: list[str],
+        selected: list[str],
+        plot_type_id: int,
+    ) -> None:
+        if len(selected) < 3:
+            return
+        type_pattern = self._plotxyz_type_pattern(plot_type_id, len(selected))
+        indexes = [columns.index(column) for column in selected[: len(type_pattern)]]
+        cols_axis = getattr(wks, "cols_axis", None)
+        if callable(cols_axis) and indexes == list(range(indexes[0], indexes[0] + len(indexes))):
+            try:
+                cols_axis(
+                    self._plotxyz_axis_spec(type_pattern),
+                    c1=indexes[0],
+                    c2=indexes[-1],
+                    repeat=False,
+                )
+                return
+            except Exception:
+                pass
+        script = " ".join(
+            f"wks.col{index + 1}.type={column_type};"
+            for index, column_type in zip(indexes, type_pattern, strict=True)
+        )
+        self._execute_on_worksheet(wks, script)
+
+    @staticmethod
+    def _plotxyz_type_pattern(plot_type_id: int, selected_count: int) -> tuple[int, ...]:
+        if plot_type_id == 183 and selected_count >= 6:
+            return (4, 1, 6, 4, 1, 6)
+        if plot_type_id == 184 and selected_count >= 4:
+            return (4, 1, 6, 6)
+        return (4, 1, 6)
+
+    @staticmethod
+    def _plotxyz_axis_spec(type_pattern: tuple[int, ...]) -> str:
+        symbols = {1: "Y", 4: "X", 6: "Z"}
+        return "".join(symbols.get(column_type, "Y") for column_type in type_pattern)
+
+    def _new_graph(self, kind: str, graph_name: str | None, template: str | None = None) -> Any:
+        if graph_name:
+            graph = self._find_graph_optional(graph_name)
+            if graph is not None:
+                self._clear_graph_plots(graph, graph_name)
+                self._set_page_long_name(graph, graph_name)
+                return graph
+
+        op = self.op
+        new_graph = getattr(op, "new_graph", None)
+        if not callable(new_graph):
+            raise OriginOperationError("originpro.new_graph is not available.")
+
+        graph_template = self._resolve_graph_template(kind=kind, template=template)
+        kwargs: dict[str, Any] = {"template": graph_template}
+        if graph_name:
+            kwargs["lname"] = graph_name
+
+        try:
+            graph = new_graph(**kwargs)
+        except TypeError:
+            graph = new_graph(graph_template)
+            if graph is not None and graph_name:
+                self._set_page_long_name(graph, graph_name)
+        if graph is None:
+            raise OriginOperationError(
+                f"Origin failed to create graph from template {graph_template!r}.",
+                error_code="graph_creation_failed",
+            )
+        return graph
+
+    @staticmethod
+    def _plot_type_visual_profile(
+        df: Any,
+        selected: list[str],
+        plot_type_id: int,
+    ) -> tuple[Any, list[Any], int]:
+        """Return X values, value series, and visual series count for a Plot ID."""
+
+        if plot_type_id == 219:
+            values = df[selected[0]].to_numpy()
+            return values, [values], 1
+        if plot_type_id == 206:
+            return selected, [df[name].to_numpy() for name in selected], len(selected)
+        single_mark_ids = {
+            183,
+            184,
+            185,
+            186,
+            191,
+            193,
+            208,
+            218,
+            221,
+            240,
+            242,
+            243,
+            245,
+            247,
+            248,
+        }
+        if plot_type_id in single_mark_ids:
+            return df[selected[0]].to_numpy(), [df[selected[-1]].to_numpy()], 1
+        value_names = selected[1:] or selected
+        return (
+            df[selected[0]].to_numpy(),
+            [df[name].to_numpy() for name in value_names],
+            max(1, len(value_names)),
+        )
+
+    @staticmethod
+    def _plot_type_axis_fields(
+        selected: list[str],
+        plot_type_id: int,
+    ) -> tuple[str | None, list[str]]:
+        """Return semantic X/Y fields for safe automatic axis titles."""
+
+        if plot_type_id == 219:
+            return selected[0], ["count"]
+        if plot_type_id == 206:
+            return "category", selected
+        no_simple_xy_axes = {103, 183, 184, 185, 186, 191, 225, 240, 242, 243, 245}
+        if plot_type_id in no_simple_xy_axes:
+            return None, []
+        if plot_type_id == 221:
+            return selected[0], selected[1:]
+        if plot_type_id in {193, 208, 218, 247, 248}:
+            return selected[0], [selected[1] if len(selected) > 1 else selected[0]]
+        return selected[0], selected[1:] or selected
+
+    def _apply_smart_visual_defaults(
+        self,
+        *,
+        graph_name: str,
+        defaults: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Apply resolved low-risk cross-chart rules to an Origin graph."""
+
+        safe_graph = self._escape_labtalk(graph_name)
+        axes = defaults.get("axes", {})
+
+        def axis_value(name: str, fallback: Any = None) -> Any:
+            if name not in axes:
+                return fallback
+            return decision_value(axes, name)
+
+        rotation = int(axis_value("x_tick_rotation", 0) or 0)
+        number_format = axis_value("y_number_format", "decimal")
+        decimal_places = int(axis_value("y_decimal_places", -1))
+        zero_baseline = bool(axis_value("y_zero_baseline", False))
+        canvas = defaults.get("canvas", {})
+        page_aspect_ratio = (
+            decision_value(canvas, "page_aspect_ratio") if "page_aspect_ratio" in canvas else None
+        )
+        bottom_margin = (
+            decision_value(canvas, "bottom_margin") if "bottom_margin" in canvas else None
+        )
+        top_margin = decision_value(canvas, "top_margin") if "top_margin" in canvas else None
+        page_width_aspect_ratio = (
+            decision_value(canvas, "page_width_aspect_ratio")
+            if "page_width_aspect_ratio" in canvas
+            else None
+        )
+        left_margin = decision_value(canvas, "left_margin") if "left_margin" in canvas else None
+        right_margin = decision_value(canvas, "right_margin") if "right_margin" in canvas else None
+        script_parts = [
+            f'win -a "{safe_graph}";',
+            "layer -s 1;",
+            f"layer.x.label.rotate={rotation};",
+            f"layer.y.label.numFormat={2 if number_format == 'scientific' else 1};",
+            f"layer.y.label.decPlaces={decimal_places};",
+        ]
+        top_axis_ticks = axis_value("top_axis_ticks")
+        if top_axis_ticks is not None:
+            script_parts.append(f"layer.x2.ticks={5 if top_axis_ticks else 0};")
+        x_number_format = axis_value("x_number_format")
+        x_decimal_places = axis_value("x_decimal_places")
+        if x_number_format is not None:
+            script_parts.extend(
+                [
+                    f"layer.x.label.numFormat={2 if x_number_format == 'scientific' else 1};",
+                    f"layer.x.label.decPlaces={int(x_decimal_places)};",
+                ]
+            )
+        for axis_name in ("x", "y"):
+            major_ticks = axis_value(f"{axis_name}_major_ticks")
+            minor_ticks = axis_value(f"{axis_name}_minor_ticks")
+            if major_ticks is not None:
+                script_parts.append(f"layer.{axis_name}.majorTicks={int(major_ticks)};")
+            if minor_ticks is not None:
+                script_parts.append(f"layer.{axis_name}.minorTicks={int(minor_ticks)};")
+            major_grid = axis_value(f"{axis_name}_major_grid")
+            if major_grid is not None:
+                script_parts.append(f"layer.{axis_name}.grid.show={1 if major_grid else 0};")
+                if major_grid:
+                    script_parts.extend(
+                        [
+                            f"layer.{axis_name}.grid.majorColor=color(235,235,235);",
+                            f"layer.{axis_name}.grid.majorType=1;",
+                            f"layer.{axis_name}.grid.majorWidth=0.5;",
+                        ]
+                    )
+            scale = axis_value(f"{axis_name}_scale")
+            if scale is not None:
+                script_parts.extend(
+                    [
+                        f"layer.{axis_name}.from={_labtalk_number(scale['from'])};",
+                        f"layer.{axis_name}.to={_labtalk_number(scale['to'])};",
+                        f"layer.{axis_name}.inc={_labtalk_number(scale['step'])};",
+                        f"layer.{axis_name}.rescale=1;",
+                    ]
+                )
+        datetime_scale = axis_value("x_datetime_scale")
+        if datetime_scale is not None:
+            ticks = " ".join(f"$({_labtalk_date(value)})" for value in datetime_scale["ticks"])
+            script_parts.extend(
+                [
+                    f"layer.x.from={_labtalk_date(datetime_scale['from'])};",
+                    f"layer.x.to={_labtalk_date(datetime_scale['to'])};",
+                    f'layer.x.ticksbydata$="{ticks}";',
+                    f"layer.x.label.type={3 if datetime_scale['label_type'] == 'time' else 4};",
+                    "layer.x.rescale=1;",
+                ]
+            )
+        if zero_baseline:
+            if axis_value("y_scale") is None:
+                script_parts.append("layer.y.from=0;")
+        y2_number_format = axis_value("y2_number_format")
+        if y2_number_format is not None:
+            script_parts.extend(
+                [
+                    "layer -s 2;",
+                    f"layer.y.label.numFormat={2 if y2_number_format == 'scientific' else 1};",
+                    f"layer.y.label.decPlaces={int(axis_value('y2_decimal_places', -1))};",
+                    f"layer.y2.label.numFormat={2 if y2_number_format == 'scientific' else 1};",
+                    f"layer.y2.label.decPlaces={int(axis_value('y2_decimal_places', -1))};",
+                ]
+            )
+            if top_axis_ticks is not None:
+                script_parts.append(f"layer.x2.ticks={5 if top_axis_ticks else 0};")
+            y2_major_ticks = axis_value("y2_major_ticks")
+            y2_minor_ticks = axis_value("y2_minor_ticks")
+            if y2_major_ticks is not None:
+                script_parts.append(f"layer.y.majorTicks={int(y2_major_ticks)};")
+                script_parts.append(f"layer.y2.majorTicks={int(y2_major_ticks)};")
+            if y2_minor_ticks is not None:
+                script_parts.append(f"layer.y.minorTicks={int(y2_minor_ticks)};")
+                script_parts.append(f"layer.y2.minorTicks={int(y2_minor_ticks)};")
+            y2_scale = axis_value("y2_scale")
+            if y2_scale is not None:
+                for axis_name in ("y", "y2"):
+                    script_parts.extend(
+                        [
+                            f"layer.{axis_name}.from={_labtalk_number(y2_scale['from'])};",
+                            f"layer.{axis_name}.to={_labtalk_number(y2_scale['to'])};",
+                            f"layer.{axis_name}.inc={_labtalk_number(y2_scale['step'])};",
+                            f"layer.{axis_name}.rescale=1;",
+                        ]
+                    )
+            script_parts.extend(
+                [
+                    "layer.x.grid.show=0;",
+                    f"layer.y.grid.show={1 if axis_value('y2_major_grid', False) else 0};",
+                    f"layer.y2.grid.show={1 if axis_value('y2_major_grid', False) else 0};",
+                ]
+            )
+        if page_aspect_ratio is not None or page_width_aspect_ratio is not None:
+            script_parts.append("page.kar=0;")
+            if page_aspect_ratio is not None:
+                script_parts.append(f"page.height=page.width/{float(page_aspect_ratio):g};")
+            elif page_width_aspect_ratio is not None:
+                script_parts.append(f"page.width=page.height*{float(page_width_aspect_ratio):g};")
+        if (
+            bottom_margin is not None
+            or top_margin is not None
+            or left_margin is not None
+            or right_margin is not None
+        ):
+            script_parts.append(
+                f"page -fls -u -ml {float(left_margin if left_margin is not None else 0.08):g} "
+                f"-mt {float(top_margin if top_margin is not None else 0.05):g} "
+                f"-mr {float(right_margin if right_margin is not None else 0.05):g} "
+                f"-mb {float(bottom_margin if bottom_margin is not None else 0.08):g};"
+            )
+        axis_script = " ".join(script_parts)
+        try:
+            axis_result = self.run_labtalk(axis_script)
+        except OriginMcpError as exc:
+            axis_result = {"warning": str(exc)}
+
+        annotations = defaults.get("annotations", {})
+        data_label_result = self._apply_smart_data_labels(
+            graph_name=graph_name,
+            policy=annotations.get("data_labels", {}),
+            axes=axes,
+        )
+        reference_line_result = self._apply_smart_reference_lines(
+            graph_name=graph_name,
+            lines=(
+                decision_value(annotations, "reference_lines")
+                if "reference_lines" in annotations
+                else []
+            ),
+        )
+
+        mark_result = None
+        marks = defaults.get("marks", {})
+        line_width = decision_value(marks, "line_width") if "line_width" in marks else None
+        symbol_size = decision_value(defaults, "marks", "symbol_size")
+        transparency = decision_value(defaults, "marks", "transparency")
+        if line_width is not None or symbol_size is not None or transparency is not None:
+            try:
+                mark_result = self.set_plot_style(
+                    graph_name=graph_name,
+                    line_width=line_width,
+                    symbol_size=symbol_size,
+                    transparency=transparency,
+                )
+            except OriginMcpError as exc:
+                mark_result = {"warning": str(exc)}
+
+        legend_result = None
+        if decision_value(defaults, "legend", "show"):
+            position = decision_value(defaults, "legend", "position")
+            if position is not None:
+                try:
+                    legend_result = self.format_legend(
+                        graph_name=graph_name,
+                        show_frame=False,
+                        position=position,
+                    )
+                except OriginMcpError as exc:
+                    legend_result = {"warning": str(exc), "position": position}
+        return {
+            "axis_script": axis_script,
+            "axis_result": axis_result,
+            "data_labels": data_label_result,
+            "reference_lines": reference_line_result,
+            "marks": mark_result,
+            "legend": legend_result,
+        }
+
+    def _apply_smart_data_labels(
+        self,
+        *,
+        graph_name: str,
+        policy: dict[str, Any],
+        axes: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if not policy or not decision_value(policy, "show"):
+            return None
+        scope = str(decision_value(policy, "scope") or "none")
+        position = str(decision_value(policy, "position") or "above")
+        font_size = int(decision_value(policy, "font_size") or 8)
+        layer_series_counts = list(decision_value(policy, "layer_series_counts") or [])
+        layer_formats = list(decision_value(policy, "layer_formats") or [])
+        position_code = {"right": 3, "above": 4}.get(position, 4)
+        try:
+            graph = self._find_or_active_graph(graph_name)
+        except (OriginMcpError, RuntimeError, AttributeError, TypeError, ValueError) as exc:
+            return {
+                "scope": scope,
+                "position": position,
+                "applied": [],
+                "warnings": [str(exc)],
+            }
+        applied: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        for layer_index, series_count in enumerate(layer_series_counts):
+            try:
+                layer = self._graph_layer(graph, layer_index)
+                plots = list(layer.plot_list())[: max(0, int(series_count))]
+            except (IndexError, OriginMcpError, RuntimeError) as exc:
+                warnings.append(f"layer {layer_index}: {exc}")
+                continue
+            if layer_index < len(layer_formats):
+                number_format = layer_formats[layer_index].get("number_format", "decimal")
+                decimal_places = int(layer_formats[layer_index].get("decimal_places", 0))
+            else:
+                number_format = decision_value(
+                    axes,
+                    "y2_number_format" if layer_index else "y_number_format",
+                )
+                decimal_places = int(
+                    decision_value(
+                        axes,
+                        "y2_decimal_places" if layer_index else "y_decimal_places",
+                    )
+                    or 0
+                )
+            display_format = (
+                f"S.{max(0, decimal_places)}"
+                if number_format == "scientific"
+                else f".{max(0, decimal_places)}"
+            )
+            for plot_index, plot in enumerate(plots):
+                commands = [
+                    "-q 1",
+                    "-qm 5",
+                    f"-j -qms $(Y,{display_format})",
+                    f"-qp {position_code}",
+                    f"-qs {font_size}",
+                    "-qc 1",
+                    "-qw 0",
+                ]
+                if scope == "all":
+                    commands.append("-qmie 0")
+                elif scope == "end":
+                    commands.extend(["-qmi 0", "-qmie 1"])
+                elif scope == "extrema":
+                    commands.extend(["-qmi Max Min", "-qmie 1"])
+                else:
+                    commands = ["-q 0"]
+                try:
+                    for command in commands:
+                        self._set_plot_command(plot, command)
+                    applied.append(
+                        {
+                            "layer_index": layer_index,
+                            "plot_index": plot_index,
+                            "scope": scope,
+                            "position": position,
+                            "format": display_format,
+                        }
+                    )
+                except (OriginMcpError, RuntimeError, AttributeError, TypeError, ValueError) as exc:
+                    warnings.append(f"layer {layer_index} plot {plot_index}: {exc}")
+        return {
+            "scope": scope,
+            "position": position,
+            "applied": applied,
+            "warnings": warnings,
+        }
+
+    def _apply_smart_reference_lines(
+        self,
+        *,
+        graph_name: str,
+        lines: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        if not lines:
+            return None
+        safe_graph = self._escape_labtalk(graph_name)
+        script_parts = [f'win -a "{safe_graph}";']
+        for line in lines:
+            layer_index = int(line.get("layer_index", 0))
+            axis = "x" if str(line.get("axis", "y")).lower() == "x" else "y"
+            value = _labtalk_number(line.get("value", 0))
+            color_index = int(line.get("color_index", 19))
+            line_style = int(line.get("line_style", 0))
+            line_width = float(line.get("line_width", 1.0))
+            role = str(line.get("role", "reference")).replace("-", "_")
+            name = f"smart_{role}_{axis}_{layer_index + 1}"
+            script_parts.extend(
+                [
+                    f"layer -s {layer_index + 1};",
+                    (
+                        f"draw -n {name} -c {color_index} -d {line_style} "
+                        f"-w {line_width:g} -l {axis} {value};"
+                    ),
+                ]
+            )
+        script = " ".join(script_parts)
+        try:
+            return {"script": script, **self.run_labtalk(script)}
+        except OriginMcpError as exc:
+            return {"script": script, "warning": str(exc)}
+
+    @staticmethod
+    def _coerce_x_datetime(df: Any, x_name: str) -> Any:
+        parsed = strict_datetime_values(df[x_name].to_numpy())
+        if parsed is None:
+            return df
+        converted = df.copy()
+        converted[x_name] = np.asarray(parsed, dtype="datetime64[us]")
+        return converted
+
+    @staticmethod
+    def _set_worksheet_display_labels(
+        wks: Any,
+        columns: list[str],
+        overrides: dict[str, str] | None = None,
+    ) -> None:
+        setter = getattr(wks, "set_labels", None)
+        if callable(setter):
+            labels = overrides or {}
+            setter(
+                [labels.get(column, humanize_field_name(column)) for column in columns],
+                "L",
+                offset=0,
+            )
+
+    @staticmethod
+    def _default_graph_templates() -> dict[str, str]:
+        return {
+            "line": "line",
+            "scatter": "scatter",
+            "line_symbol": "line",
+            "column": "column",
+            "contour": "contour",
+            "histogram": "Hist",
+            "box": "box",
+            "heatmap": "heatmap",
+            "scatter3d": "3dscatter",
+            "surface3d": "surface",
+            "polar": "polar",
+        }
+
+    def _resolve_graph_template(self, kind: str, template: str | None = None) -> str:
+        if template:
+            # A bare name may refer to a user-library template; resolve it to the
+            # saved .otpu path so any plotting tool can reuse it by name. Built-in
+            # names and explicit paths are not in the library and pass through for
+            # Origin to resolve.
+            saved = template_library.resolve_template_name(template)
+            return str(saved) if saved is not None else template
+        return self._default_graph_templates().get(kind, "line")
+
+    @staticmethod
+    def _plot_command(
+        command: str,
+        range_option: str,
+        data_range: str,
+        plot_type_id: int,
+        template: str,
+        graph_name: str,
+        reuse_existing: bool = False,
+    ) -> str:
+        safe_template = _OriginClientBase._escape_labtalk(template)
+        safe_graph = _OriginClientBase._escape_labtalk(graph_name)
+        output_graph = (
+            f"ogl:=[{safe_graph}]1"
+            if reuse_existing
+            else f"ogl:=<new template:={safe_template} name:={safe_graph}>"
+        )
+        return f"{command} {range_option}:={data_range} plot:={plot_type_id} {output_graph};"

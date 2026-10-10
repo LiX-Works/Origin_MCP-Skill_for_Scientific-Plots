@@ -1,0 +1,133 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "origin-mcp"
+dynamic = ["version"]
+description = "Local MCP server that lets AI assistants automate Origin/OriginPro for data import, worksheet editing, plotting, analysis, and export on Windows."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Ge-Shun", email = "Ge-Shun@users.noreply.github.com" }
+]
+keywords = ["mcp", "origin", "originpro", "plotting", "automation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Win32 (MS Windows)",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering :: Visualization",
+]
+dependencies = [
+  "mcp>=1.8.0",
+  "pydantic>=2.0",
+  "pandas>=2.0",
+  "openpyxl>=3.1",
+  "xlrd>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Ge-Shun/origin-mcp"
+Repository = "https://github.com/Ge-Shun/origin-mcp"
+Issues = "https://github.com/Ge-Shun/origin-mcp/issues"
+
+[project.optional-dependencies]
+origin = [
+  "originpro>=1.1",
+  "pywin32>=306; platform_system == 'Windows'",
+]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=5.0",
+  # Keep CI and pre-commit on the same formatter release. Formatter output can
+  # change between Ruff versions even when lint rules do not.
+  "ruff==0.15.22",
+  "mypy>=1.8",
+]
+
+[project.scripts]
+origin-mcp = "origin_mcp.cli:main"
+
+[tool.hatch.version]
+# Single source of truth: the version lives in src/origin_mcp/__init__.py
+# (__version__), which the bridge reports over its ping handshake. Keeping it
+# there avoids drift between the package metadata and the running bridge.
+path = "src/origin_mcp/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/origin_mcp"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/origin_mcp/py.typed" = "origin_mcp/py.typed"
+"addon.py" = "origin_mcp/app_assets/addon.py"
+"docs/assets/origin-mcp-start-icon.png" = "origin_mcp/app_assets/origin-mcp-start-icon.png"
+"docs/assets/origin-mcp-stop-icon.png" = "origin_mcp/app_assets/origin-mcp-stop-icon.png"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [".venv*", "output"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src/origin_mcp"]
+mypy_path = "src"
+# The codebase was not previously type-checked. This is a deliberately lenient
+# baseline: mypy catches signature/return/assignment regressions without
+# requiring a full annotation pass. Tighten these over time.
+ignore_missing_imports = true
+namespace_packages = true
+explicit_package_bases = true
+no_site_packages = true
+
+[[tool.mypy.overrides]]
+# Keep mypy focused on origin-mcp itself across the full supported Python range.
+# Recent pandas/numpy wheels may ship type stubs that use syntax newer than our
+# Python 3.10 checking target, so site-packages are disabled globally and these
+# imports are explicitly treated as external Any-typed dependencies.
+module = [
+  "numpy",
+  "numpy.*",
+  "openpyxl",
+  "pandas",
+  "pandas.*",
+  "xlrd",
+]
+follow_imports = "skip"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# OriginClient is assembled from cooperating mixins (_TablePlotMixin,
+# _GraphStyleMixin, ...) that call across one another, so checking each mixin in
+# isolation produces false "has no attribute" positives (attr-defined). The
+# remaining "misc" suppressions cover a generator-typing quirk where len() over
+# the dynamically typed originpro plot list reads as bool. Every other error
+# code is now enforced on this package; only these two stay relaxed.
+module = "origin_mcp.client.*"
+disable_error_code = [
+  "attr-defined",
+  "misc",
+]
+
+[tool.pytest.ini_options]
+norecursedirs = [
+  ".git",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".venv*",
+  "__pycache__",
+  "build",
+  "dist",
+  "output",
+  "pytest-tmp",
+  "pytest-tmp-*",
+]
