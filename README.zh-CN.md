@@ -1,22 +1,20 @@
 # Origin MCP + Skill for Scientific Plots
 
-[English](README.md)
+[English](README.md) | **简体中文**
 
-**Origin_MCP-Skill_for_Scientific-Plots** 让 AI Agent 根据你的数据和绘图要求，在 Origin 中创建、调整并交付清晰、可编辑的科研图表。
+Origin MCP + Skill 让 AI Agent 根据你的数据和一句话描述，在 Origin 中画出清晰、可编辑、符合期刊规范的科研图。Origin 是为人工点选菜单和对话框设计的软件；MCP 桥接让 Agent 能直接操作它，Skill 则是 Agent 手里的绘图说明书。
 
-## 项目能做什么
+- **能直接操作 Origin 的 Agent。** 通过 MCP 桥接，Agent 自己导入数据、创建并美化图表、保存工程、导出图形，不需要手动点选。
+- **内置期刊绘图规范。** Skill 采用 Nature 图稿指南和 NIST 规范：字体字号、页面尺寸、坐标轴、单位、配色和图例，变量斜体、单位正体。
+- **结果经过核对，且可继续编辑。** Agent 查看实际渲染的图并逐步调整，核对数值和数据绑定，交付可以继续编辑的 Origin 工程。
 
-提供数据并说明想画什么图，Agent 就能在 Origin 中完成绘图。没有指定图型，或要求与数据明显不匹配时，Agent 可以提出建议，帮助你确定合适的画法。
+<img src="assets/overview.png" alt="数据和绘图要求交给 AI Agent；Skill 提供绘图规则，MCP 桥接让 Agent 在 Origin 中导入数据、创建图表、设置样式和坐标轴、保存并导出；Agent 检查实际画面后继续调整，最终交付可编辑的 Origin 工程和导出图。" width="1600">
 
-坐标轴、单位、标签、符号、配色、图例和页面布局也纳入同一流程。Agent 可以检查实际画面，逐步调整图表；对于已有图表，也可以通过更新绑定的数据来刷新结果。交付包括可继续编辑的 Origin 工程与图形导出，并检查数值、图形绑定以及保存后的结果。
+## 怎么用
 
-## MCP 与 Skill 如何配合
+提供数据并说明想画什么图。没有指定图型，或要求与数据明显不匹配时，Agent 会在绘图前给出建议。已有图表可以通过更新绑定的数据来刷新。每次交付都包括 Origin 工程（`.opju`）和 PNG、PDF 等导出图。
 
-**MCP 让 Agent 操作 Origin：**导入数据、创建和调整图表、保存工程、导出图形。
-
-**Skill 用科研绘图经验指导操作：**设置字体字号、页面尺寸、坐标轴、配色和图例，并遵循变量斜体、单位正体等排版规则。
-
-本项目包含 Agent Skill、适用于该工作流的 MCP 调整、执行辅助工具和绘图示例。具体方法见 [Skill](skills/origin-figures/SKILL.md)、[工作流说明](skills/origin-figures/references/common-workflow.md)和 [MCP 修改记录](UPSTREAM_CHANGES.md)。
+仓库包含 [Skill](skills/origin-figures/SKILL.md)、附带的 [MCP 源码](mcp/README.zh.md)及本项目的[修改记录](UPSTREAM_CHANGES.md)、执行辅助工具和下方示例。完整流程见[工作流说明](skills/origin-figures/references/common-workflow.md)。
 
 ## 图形示例
 
@@ -33,13 +31,11 @@
   </tr>
 </table>
 
-## 使用准备
+## 开始使用
 
-准备 Windows、已授权的 Origin、满足所附 MCP 依赖的 Python，以及能够使用 MCP 并加载 Skill 的 Agent。使用时提供数据、想画什么图和期望的输出格式即可。
+需要 Windows、已授权的 Origin 或 OriginPro、运行所附 MCP 的 Python，以及能够使用 MCP 并加载 Skill 的 Agent。按[安装指南](INSTALLATION.md)配置后，从 [Skill 入口](skills/origin-figures/SKILL.md)开始。请使用本仓库附带的 MCP 源码而不是上游安装包，以包含本项目的调整。
 
-从[安装指南](INSTALLATION.md)与 [Skill 入口](skills/origin-figures/SKILL.md)开始，使用本仓库附带的 MCP 源码，以包含本项目的调整；详细接口见[所附 MCP 文档](mcp/README.zh.md)。
-
-<sub>本项目在 Codex 主导的工作流中开发并测试。其他兼容 MCP 的 Agent 也可能适用，但尚未测试其具体配置。</sub>
+已在 Windows 与 OriginPro 2026 下检查，见[验证详情](VALIDATION.md)。在 Codex 中开发并测试；其他兼容 MCP 的 Agent 也可能适用，但尚未测试。
 
 ## 致谢与许可证
 

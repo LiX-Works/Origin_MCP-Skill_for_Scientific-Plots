@@ -17,3 +17,6 @@ Typora_Hook_Log.txt
 .env.*
 !.env.example
 
+
+# Browser wrapper written by assets/source/build_overview.py for PNG rendering
+assets/source/overview.html

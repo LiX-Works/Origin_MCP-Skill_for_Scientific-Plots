@@ -1,22 +1,20 @@
 # Origin MCP + Skill for Scientific Plots
 
-[中文介绍](README.zh-CN.md)
+**English** | [简体中文](README.zh-CN.md)
 
-**Origin_MCP-Skill_for_Scientific-Plots** lets an AI Agent create, refine, and deliver clear, editable scientific figures in Origin from your data and plotting requirements.
+Origin MCP + Skill lets an AI agent make clear, editable, journal-style figures in Origin from your data and a plain description of the figure you want. Origin is built for people working through menus and dialogs; the MCP bridge lets the agent operate it directly, and the Skill gives the agent a plotting manual.
 
-## What it does
+- **An agent that can drive Origin.** Through the MCP bridge, the agent imports data, builds and styles graphs, saves projects, and exports figures, with no manual clicking.
+- **Journal conventions built in.** The Skill applies figure guidance from Nature and NIST: font sizes, page dimensions, axes, units, colours, and legends, with italic variables and upright units.
+- **Checked, editable results.** The agent reviews the rendered figure and refines it, checks values and data bindings, and delivers an Origin project you can keep editing.
 
-Provide your data and describe the figure you want, and the Agent creates it in Origin. If you have not specified a graph type, or the request clearly does not fit the data, it can suggest a suitable approach.
+<img src="assets/overview.png" alt="Your data and figure request go to an AI agent. The Skill supplies plotting rules; the MCP bridge lets the agent import data, build the graph, set styles and axes, and save and export in Origin. The agent reviews the rendered figure and refines it, then delivers an editable Origin project and exports." width="1600">
 
-Axes, units, labels, symbols, colors, legends, and page layout are part of the same workflow. The Agent can inspect the rendered figure and refine it, or refresh an existing figure by updating its bound data. Delivery includes an editable Origin project and figure exports, with checks of the values, plot bindings, and saved result.
+## Working with it
 
-## How MCP and Skill work together
+Give it your data and the figure you want. If the graph type is missing or clearly does not fit the data, the agent suggests one before drawing. Existing figures can be refreshed by updating their bound data. Each delivery includes an Origin project (`.opju`) and figure exports such as PNG and PDF.
 
-**MCP lets the Agent operate Origin:** import data, create and adjust figures, save projects, and export graphics.
-
-**The Skill guides those operations with scientific plotting practice:** fonts and sizes, page dimensions, axes, colors, legends, and conventions such as italic variables and upright units.
-
-The project includes an Agent Skill, MCP adaptations for this workflow, execution helpers, and plotting examples. See the [Skill](skills/origin-figures/SKILL.md), [workflow guide](skills/origin-figures/references/common-workflow.md), and [MCP changes](UPSTREAM_CHANGES.md).
+The repository contains the [Skill](skills/origin-figures/SKILL.md), the bundled [MCP source](mcp/README.md) with this project's [adaptations](UPSTREAM_CHANGES.md), execution helpers, and the examples below. The [workflow guide](skills/origin-figures/references/common-workflow.md) describes the full process.
 
 ## Examples
 
@@ -33,13 +31,11 @@ The following examples use synthetic data.
   </tr>
 </table>
 
-## Using the project
+## Getting started
 
-Prepare Windows, a licensed Origin installation, Python with the bundled MCP's dependencies, and an Agent that can use MCP and load the Skill. To use it, provide your data, the figure you want, and the desired output format.
+You need Windows, a licensed Origin or OriginPro, Python for the bundled MCP, and an agent that can use MCP and load a Skill. Follow the [installation guide](INSTALLATION.md), then start from the [Skill entry point](skills/origin-figures/SKILL.md). Use the bundled MCP source rather than the upstream package so this project's adaptations are included.
 
-Start with the [installation guide](INSTALLATION.md) and the [Skill entrypoint](skills/origin-figures/SKILL.md). Use this repository's bundled MCP source so the project's adaptations are included; its [technical documentation](mcp/README.md) is also included.
-
-<sub>Developed and tested in a Codex-led workflow. Other MCP-compatible agents may also work; their setups have not been tested.</sub>
+Checked on Windows with OriginPro 2026; see [validation details](VALIDATION.md). Built and tested with Codex; other MCP-compatible agents may also work but have not been tested.
 
 ## Acknowledgements and license
 
