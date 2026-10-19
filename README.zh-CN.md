@@ -2,13 +2,22 @@
 
 [English](README.md) | **简体中文**
 
-一套让 AI Agent 在 Origin 中绘制可编辑科研图的 MCP 服务与 Skill。Origin 面向交互式操作；所附 MCP 服务使 Agent 能以程序方式完成数据导入、图表构建、样式设置、保存和导出，Skill 则提供源自 Nature 图稿指南和 NIST 符号单位规范的绘图约定。Agent 检查每次渲染结果并逐步调整，核对数值和数据绑定后，交付 Origin 工程（`.opju`）及 PNG 或 PDF 导出图。
+Origin 面向人工交互操作，AI Agent 很难直接驾驭。本项目提供 Agent 在 Origin 中绘制可编辑科研图所需的两部分：
+
+| 组成 | 作用 |
+|---|---|
+| **MCP 服务** | 直接操作 Origin：导入数据、构建并设置图表样式、保存工程、导出图形 |
+| **Skill** | 提供源自 Nature 图稿指南和 NIST 规范的绘图约定：字体字号、页面尺寸、坐标轴、单位、配色、图例 |
+
+Agent 检查每次渲染结果并逐步调整，核对数值和数据绑定。交付的是可继续编辑的 Origin 工程（`.opju`），以及 PNG 或 PDF 导出图。
 
 <img src="assets/overview.png" alt="数据和绘图要求交给 AI Agent；Skill 提供绘图规则，MCP 桥接让 Agent 在 Origin 中导入数据、创建图表、设置样式和坐标轴、保存并导出；Agent 检查实际画面后继续调整，最终交付可编辑的 Origin 工程和导出图。" width="1600">
 
 ## 工作方式
 
-提供数据并描述所需图形。未指定图型或图型明显不适合数据时，Agent 会在绘图前提出替代方案；已有图表可通过更新绑定数据刷新。仓库包含 [Skill](skills/origin-figures/SKILL.md)、附带的 [MCP 源码](mcp/README.zh.md)及本项目的[修改记录](UPSTREAM_CHANGES.md)、执行辅助工具和下方示例；完整流程见[工作流说明](skills/origin-figures/references/common-workflow.md)。
+提供数据并描述所需图形。未指定图型或图型明显不适合数据时，Agent 会在绘图前提出替代方案。已有图表可通过更新绑定数据刷新。
+
+仓库包含 [Skill](skills/origin-figures/SKILL.md)、附带的 [MCP 源码](mcp/README.zh.md)及本项目的[修改记录](UPSTREAM_CHANGES.md)、执行辅助工具和下方示例；完整流程见[工作流说明](skills/origin-figures/references/common-workflow.md)。
 
 ## 图形示例
 

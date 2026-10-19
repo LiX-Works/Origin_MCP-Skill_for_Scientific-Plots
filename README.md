@@ -2,13 +2,22 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-An MCP server and Skill that let an AI agent produce editable scientific figures in Origin. Origin is built for interactive use; the bundled MCP server gives the agent programmatic control over data import, graph construction, styling, saving, and export, and the Skill supplies plotting conventions from the Nature figure guide and NIST guidance on symbols and units. The agent inspects each rendered figure, refines it, and checks values and data bindings before delivering an Origin project (`.opju`) with PNG or PDF exports.
+Origin is built for interactive use, which makes it hard for an AI agent to drive. This project supplies the two pieces an agent needs to produce editable scientific figures in it:
+
+| Component | Role |
+|---|---|
+| **MCP server** | Operates Origin directly: imports data, builds and styles graphs, saves projects, exports figures |
+| **Skill** | Supplies plotting conventions from the Nature figure guide and NIST guidance: font sizes, page dimensions, axes, units, colours, legends |
+
+The agent inspects each rendered figure, refines it, and checks values and data bindings. The result is an Origin project (`.opju`) that stays editable, with PNG or PDF exports.
 
 <img src="assets/overview.png" alt="Your data and figure request go to an AI agent. The Skill supplies plotting rules; the MCP bridge lets the agent import data, build the graph, set styles and axes, and save and export in Origin. The agent reviews the rendered figure and refines it, then delivers an editable Origin project and exports." width="1600">
 
 ## Workflow
 
-Provide the data and a description of the figure. If the graph type is unspecified or clearly unsuited to the data, the agent proposes an alternative before plotting; existing figures can be refreshed by updating their bound data. The repository contains the [Skill](skills/origin-figures/SKILL.md), the bundled [MCP source](mcp/README.md) with this project's [adaptations](UPSTREAM_CHANGES.md), execution helpers, and the examples below. The [workflow guide](skills/origin-figures/references/common-workflow.md) documents the full process.
+Provide the data and a description of the figure. If the graph type is unspecified or clearly unsuited to the data, the agent proposes an alternative before plotting. Existing figures can be refreshed by updating their bound data.
+
+The repository contains the [Skill](skills/origin-figures/SKILL.md), the bundled [MCP source](mcp/README.md) with this project's [adaptations](UPSTREAM_CHANGES.md), execution helpers, and the examples below. The [workflow guide](skills/origin-figures/references/common-workflow.md) documents the full process.
 
 ## Examples
 
