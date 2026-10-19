@@ -2,19 +2,13 @@
 
 [English](README.md) | **简体中文**
 
-Origin MCP + Skill 让 AI Agent 根据你的数据和一句话描述，在 Origin 中画出清晰、可编辑、符合期刊规范的科研图。Origin 是为人工点选菜单和对话框设计的软件；MCP 桥接让 Agent 能直接操作它，Skill 则是 Agent 手里的绘图说明书。
-
-- **能直接操作 Origin 的 Agent。** 通过 MCP 桥接，Agent 自己导入数据、创建并美化图表、保存工程、导出图形，不需要手动点选。
-- **内置期刊绘图规范。** Skill 采用 Nature 图稿指南和 NIST 规范：字体字号、页面尺寸、坐标轴、单位、配色和图例，变量斜体、单位正体。
-- **结果经过核对，且可继续编辑。** Agent 查看实际渲染的图并逐步调整，核对数值和数据绑定，交付可以继续编辑的 Origin 工程。
+一套让 AI Agent 在 Origin 中绘制可编辑科研图的 MCP 服务与 Skill。Origin 面向交互式操作；所附 MCP 服务使 Agent 能以程序方式完成数据导入、图表构建、样式设置、保存和导出，Skill 则提供源自 Nature 图稿指南和 NIST 符号单位规范的绘图约定。Agent 检查每次渲染结果并逐步调整，核对数值和数据绑定后，交付 Origin 工程（`.opju`）及 PNG 或 PDF 导出图。
 
 <img src="assets/overview.png" alt="数据和绘图要求交给 AI Agent；Skill 提供绘图规则，MCP 桥接让 Agent 在 Origin 中导入数据、创建图表、设置样式和坐标轴、保存并导出；Agent 检查实际画面后继续调整，最终交付可编辑的 Origin 工程和导出图。" width="1600">
 
-## 怎么用
+## 工作方式
 
-提供数据并说明想画什么图。没有指定图型，或要求与数据明显不匹配时，Agent 会在绘图前给出建议。已有图表可以通过更新绑定的数据来刷新。每次交付都包括 Origin 工程（`.opju`）和 PNG、PDF 等导出图。
-
-仓库包含 [Skill](skills/origin-figures/SKILL.md)、附带的 [MCP 源码](mcp/README.zh.md)及本项目的[修改记录](UPSTREAM_CHANGES.md)、执行辅助工具和下方示例。完整流程见[工作流说明](skills/origin-figures/references/common-workflow.md)。
+提供数据并描述所需图形。未指定图型或图型明显不适合数据时，Agent 会在绘图前提出替代方案；已有图表可通过更新绑定数据刷新。仓库包含 [Skill](skills/origin-figures/SKILL.md)、附带的 [MCP 源码](mcp/README.zh.md)及本项目的[修改记录](UPSTREAM_CHANGES.md)、执行辅助工具和下方示例；完整流程见[工作流说明](skills/origin-figures/references/common-workflow.md)。
 
 ## 图形示例
 
@@ -33,7 +27,7 @@ Origin MCP + Skill 让 AI Agent 根据你的数据和一句话描述，在 Origi
 
 ## 开始使用
 
-需要 Windows、已授权的 Origin 或 OriginPro、运行所附 MCP 的 Python，以及能够使用 MCP 并加载 Skill 的 Agent。按[安装指南](INSTALLATION.md)配置后，从 [Skill 入口](skills/origin-figures/SKILL.md)开始。请使用本仓库附带的 MCP 源码而不是上游安装包，以包含本项目的调整。
+需要 Windows、已授权的 Origin 或 OriginPro、运行所附 MCP 的 Python，以及能够使用 MCP 并加载 Skill 的 Agent。按[安装指南](INSTALLATION.md)配置后，从 [Skill 入口](skills/origin-figures/SKILL.md)开始。请使用本仓库附带的 MCP 源码；上游安装包不含本项目的调整。
 
 已在 Windows 与 OriginPro 2026 下检查，见[验证详情](VALIDATION.md)。在 Codex 中开发并测试；其他兼容 MCP 的 Agent 也可能适用，但尚未测试。
 
