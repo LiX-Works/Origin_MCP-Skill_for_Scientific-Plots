@@ -11,6 +11,9 @@ Origin is built for interactive use, which makes it hard for an AI agent to driv
 
 The agent inspects each rendered figure, refines it, and checks values and data bindings. The result is an Origin project (`.opju`) that stays editable, with PNG or PDF exports.
 
+> [!NOTE]
+> **Human-in-the-Loop.** This Skill handles repetitive research tasks; it supports research rather than doing it. Keep questions, judgments, and conclusions with people, and check every result before use.
+
 <img src="assets/overview.png" alt="Your data and figure request go to an AI agent. The Skill supplies plotting rules; the MCP bridge lets the agent import data, build the graph, set styles and axes, and save and export in Origin. The agent reviews the rendered figure and refines it, then delivers an editable Origin project and exports." width="1600">
 
 ## Workflow

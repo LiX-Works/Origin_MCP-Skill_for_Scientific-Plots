@@ -11,6 +11,9 @@ Origin 面向人工交互操作，AI Agent 很难直接驾驭。本项目提供 
 
 Agent 检查每次渲染结果并逐步调整，核对数值和数据绑定。交付的是可继续编辑的 Origin 工程（`.opju`），以及 PNG 或 PDF 导出图。
 
+> [!NOTE]
+> **Human-in-the-Loop.** 这个 Skill 承担重复性的科研事务，是辅助研究，而不是替代研究。问题、判断和结论留给人，每个结果使用前都要检查。
+
 <img src="assets/overview.png" alt="数据和绘图要求交给 AI Agent；Skill 提供绘图规则，MCP 桥接让 Agent 在 Origin 中导入数据、创建图表、设置样式和坐标轴、保存并导出；Agent 检查实际画面后继续调整，最终交付可编辑的 Origin 工程和导出图。" width="1600">
 
 ## 工作方式
