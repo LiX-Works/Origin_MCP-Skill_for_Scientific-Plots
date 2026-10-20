@@ -115,7 +115,7 @@ add(f'<path d="M{bx} {by + 6} q28 -12 52 0 v46 q-24 -10 -52 0z" fill="{C["skill"
 add(f'<path d="M{bx + 56} {by + 6} q24 -12 52 0 v46 q-28 -10 -52 0z" fill="{C["skill"]}" opacity=".72"/>')
 text(SK["x"] + 162, SK["y"] + 62, "Skill: plotting manual", 30)
 chips(SK["x"] + SK["w"] / 2, SK["y"] + 92, ["Fonts", "Axes & units", "Colour", "Page size"],
-      18, C["skillTint"], C["skill"], pad=26, gap=10)
+      20, C["skillTint"], C["skill"], pad=22, gap=8)
 
 # ---------- agent ----------
 add(f'<rect x="{AG["x"]}" y="{AG["y"]}" width="{AG["w"]}" height="{AG["h"]}" rx="28" fill="url(#leadGrad)" filter="url(#leadShadow)"/>')
@@ -199,8 +199,8 @@ add(f'<path d="M{dx} {dy} h56 l24 24 v74 h-80z" fill="#FFFFFF" stroke="{C["mcp"]
 add(f'<path d="M{dx + 56} {dy} v24 h24" fill="none" stroke="{C["mcp"]}" stroke-width="3"/>')
 line(f"M{dx + 14} {dy + 84}v-36M{dx + 14} {dy + 84}h50", C["mcp"], 2.4)
 line(f"M{dx + 20} {dy + 74} l12 -12 l10 6 l18 -20", "#1FA9BA", 3.4)
-add(f'<rect x="{dx - 26}" y="{dy + 18}" width="64" height="26" rx="6" fill="{C["mcp"]}"/>')
-text(dx + 6, dy + 37, ".opju", 18, 700, "#FFFFFF", "middle")
+add(f'<rect x="{dx - 30}" y="{dy + 16}" width="72" height="30" rx="6" fill="{C["mcp"]}"/>')
+text(dx + 6, dy + 38, ".opju", 21, 700, "#FFFFFF", "middle")
 text(ocx, OUT["y"] + 196, "Project + exports", 24, 400, C["sub"], "middle")
 
 # ---------- flow arrows ----------
@@ -212,9 +212,15 @@ arrow([(ox + ow + g, MID), (OUT["x"] - g, MID)])
 ly = 720
 arrow([(ox + ow / 2, oy + oh + g), (ox + ow / 2, ly), (acx, ly), (acx, AG["y"] + AG["h"] + g)], C["amber"])
 lcx = (acx + ox + ow / 2) / 2
-add(f'<rect x="{f(lcx - 118)}" y="{ly - 22}" width="236" height="44" rx="22" fill="#FFFFFF"/>')
-text(lcx, ly + 9, "review & refine", 26, 700, C["amberText"], "middle")
-chips(lcx, ly + 38, ["Scale", "Ticks", "Legend", "Values"], 19)
+# the loop label carries the human: a person reviews the figure, the agent refines it
+add(f'<rect x="{f(lcx - 286)}" y="{ly - 30}" width="572" height="60" rx="30" fill="#FFFFFF"/>')
+# person mark inside a ring, sized to match the 30 px label
+pcx = lcx - 246
+add(f'<circle cx="{f(pcx)}" cy="{ly}" r="24" fill="#FFFFFF" stroke="{C["amber"]}" stroke-width="3.5"/>')
+add(f'<circle cx="{f(pcx)}" cy="{ly - 7}" r="7.5" fill="{C["amber"]}"/>')
+add(f'<rect x="{f(pcx - 12)}" y="{ly + 3}" width="24" height="13" rx="6.5" fill="{C["amber"]}"/>')
+text(lcx + 22, ly + 11, "Human reviews, agent refines", 30, 700, C["amberText"], "middle")
+chips(lcx, ly + 46, ["Scale", "Ticks", "Legend", "Values"], 22)
 
 defs = f"""<defs>
   <linearGradient id="leadGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{C['lead0']}"/><stop offset="1" stop-color="{C['lead1']}"/></linearGradient>

@@ -30,14 +30,14 @@
 <path d="M54 146 q28 -12 52 0 v46 q-24 -10 -52 0z" fill="#5A3CC2"/>
 <path d="M110 146 q24 -12 52 0 v46 q-28 -10 -52 0z" fill="#5A3CC2" opacity=".72"/>
 <text x="186" y="174" font-size="30" font-weight="700" fill="#16203A" text-anchor="start" >Skill: plotting manual</text>
-<rect x="44.2" y="204" width="80" height="36" rx="18" fill="#F1ECFD"/>
-<text x="84.2" y="229" font-size="18" font-weight="700" fill="#5A3CC2" text-anchor="middle" >Fonts</text>
-<rect x="134.2" y="204" width="155.6" height="36" rx="18" fill="#F1ECFD"/>
-<text x="212" y="229" font-size="18" font-weight="700" fill="#5A3CC2" text-anchor="middle" >Axes &amp; units</text>
-<rect x="299.8" y="204" width="90.8" height="36" rx="18" fill="#F1ECFD"/>
-<text x="345.2" y="229" font-size="18" font-weight="700" fill="#5A3CC2" text-anchor="middle" >Colour</text>
-<rect x="400.6" y="204" width="123.2" height="36" rx="18" fill="#F1ECFD"/>
-<text x="462.2" y="229" font-size="18" font-weight="700" fill="#5A3CC2" text-anchor="middle" >Page size</text>
+<rect x="36" y="204" width="82" height="36" rx="18" fill="#F1ECFD"/>
+<text x="77" y="229" font-size="20" font-weight="700" fill="#5A3CC2" text-anchor="middle" >Fonts</text>
+<rect x="126" y="204" width="166" height="36" rx="18" fill="#F1ECFD"/>
+<text x="209" y="229" font-size="20" font-weight="700" fill="#5A3CC2" text-anchor="middle" >Axes &amp; units</text>
+<rect x="300" y="204" width="94" height="36" rx="18" fill="#F1ECFD"/>
+<text x="347" y="229" font-size="20" font-weight="700" fill="#5A3CC2" text-anchor="middle" >Colour</text>
+<rect x="402" y="204" width="130" height="36" rx="18" fill="#F1ECFD"/>
+<text x="467" y="229" font-size="20" font-weight="700" fill="#5A3CC2" text-anchor="middle" >Page size</text>
 <rect x="290" y="330" width="200" height="240" rx="28" fill="url(#leadGrad)" filter="url(#leadShadow)"/>
 <rect x="290" y="330" width="200" height="240" rx="28" fill="url(#sheen)"/>
 <text x="390" y="444" font-size="52" font-weight="700" fill="#FFFFFF" text-anchor="middle" >AI</text>
@@ -2290,8 +2290,8 @@
 <path d="M1461.0 416 v24 h24" fill="none" stroke="#2E3F8F" stroke-width="3"/>
 <path d="M1419.0 500v-36M1419.0 500h50" fill="none" stroke="#2E3F8F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
 <path d="M1425.0 490 l12 -12 l10 6 l18 -20" fill="none" stroke="#1FA9BA" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" />
-<rect x="1379.0" y="434" width="64" height="26" rx="6" fill="#2E3F8F"/>
-<text x="1411" y="453" font-size="18" font-weight="700" fill="#FFFFFF" text-anchor="middle" >.opju</text>
+<rect x="1375.0" y="432" width="72" height="30" rx="6" fill="#2E3F8F"/>
+<text x="1411" y="454" font-size="21" font-weight="700" fill="#FFFFFF" text-anchor="middle" >.opju</text>
 <text x="1445" y="536" font-size="24" font-weight="400" fill="#2C3850" text-anchor="middle" >Project + exports</text>
 <path d="M237 450 L270 450" fill="none" stroke="#2E3A55" stroke-width="5.5" stroke-linejoin="round"/>
 <path d="M283 450 L261 461 L261 439Z" fill="#2E3A55"/>
@@ -2301,15 +2301,18 @@
 <path d="M1313 450 L1291 461 L1291 439Z" fill="#2E3A55"/>
 <path d="M1070 657 L1070 720 L390 720 L390 590" fill="none" stroke="#E8960F" stroke-width="5.5" stroke-linejoin="round"/>
 <path d="M390 577 L401 599 L379 599Z" fill="#E8960F"/>
-<rect x="612" y="698" width="236" height="44" rx="22" fill="#FFFFFF"/>
-<text x="730" y="729" font-size="26" font-weight="700" fill="#A9650A" text-anchor="middle" >review &amp; refine</text>
-<rect x="522.6" y="758" width="89" height="36" rx="18" fill="#EEF1F6"/>
-<text x="567.1" y="783" font-size="19" font-weight="700" fill="#3F4B63" text-anchor="middle" >Scale</text>
-<rect x="623.6" y="758" width="89" height="36" rx="18" fill="#EEF1F6"/>
-<text x="668.1" y="783" font-size="19" font-weight="700" fill="#3F4B63" text-anchor="middle" >Ticks</text>
-<rect x="724.6" y="758" width="100.4" height="36" rx="18" fill="#EEF1F6"/>
-<text x="774.8" y="783" font-size="19" font-weight="700" fill="#3F4B63" text-anchor="middle" >Legend</text>
-<rect x="837" y="758" width="100.4" height="36" rx="18" fill="#EEF1F6"/>
-<text x="887.2" y="783" font-size="19" font-weight="700" fill="#3F4B63" text-anchor="middle" >Values</text>
+<rect x="444" y="690" width="572" height="60" rx="30" fill="#FFFFFF"/>
+<circle cx="484" cy="720" r="24" fill="#FFFFFF" stroke="#E8960F" stroke-width="3.5"/>
+<circle cx="484" cy="713" r="7.5" fill="#E8960F"/>
+<rect x="472" y="723" width="24" height="13" rx="6.5" fill="#E8960F"/>
+<text x="752" y="731" font-size="30" font-weight="700" fill="#A9650A" text-anchor="middle" >Human reviews, agent refines</text>
+<rect x="502.8" y="766" width="98" height="36" rx="18" fill="#EEF1F6"/>
+<text x="551.8" y="791" font-size="22" font-weight="700" fill="#3F4B63" text-anchor="middle" >Scale</text>
+<rect x="612.8" y="766" width="98" height="36" rx="18" fill="#EEF1F6"/>
+<text x="661.8" y="791" font-size="22" font-weight="700" fill="#3F4B63" text-anchor="middle" >Ticks</text>
+<rect x="722.8" y="766" width="111.2" height="36" rx="18" fill="#EEF1F6"/>
+<text x="778.4" y="791" font-size="22" font-weight="700" fill="#3F4B63" text-anchor="middle" >Legend</text>
+<rect x="846" y="766" width="111.2" height="36" rx="18" fill="#EEF1F6"/>
+<text x="901.6" y="791" font-size="22" font-weight="700" fill="#3F4B63" text-anchor="middle" >Values</text>
 </g>
 </svg>
